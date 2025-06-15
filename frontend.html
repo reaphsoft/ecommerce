@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-commerce API Frontend</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; background: #f7f7f7; }
+        h1 { color: #333; }
+        .section { background: #fff; padding: 1em 2em; margin-bottom: 2em; border-radius: 8px; box-shadow: 0 2px 8px #0001; }
+        label { display: block; margin-top: 1em; }
+        input, button, select { margin-top: 0.5em; padding: 0.5em; border-radius: 4px; border: 1px solid #ccc; }
+        button { background: #007bff; color: #fff; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #eee; padding: 1em; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <h1>E-commerce API Frontend</h1>
+    <div class="section">
+        <h2>Register</h2>
+        <label>Username: <input id="reg-username"></label>
+        <label>Password: <input id="reg-password" type="password"></label>
+        <button onclick="register()">Register</button>
+        <pre id="reg-result"></pre>
+    </div>
+    <div class="section">
+        <h2>Login</h2>
+        <label>Username: <input id="login-username"></label>
+        <label>Password: <input id="login-password" type="password"></label>
+        <button onclick="login()">Login</button>
+        <pre id="login-result"></pre>
+    </div>
+    <div class="section">
+        <h2>Logout</h2>
+        <button onclick="logout()">Logout</button>
+        <pre id="logout-result"></pre>
+    </div>
+    <div class="section">
+        <h2>Me (Current User)</h2>
+        <button onclick="me()">Get My Info</button>
+        <pre id="me-result"></pre>
+    </div>
+    <div class="section">
+        <h2>Products</h2>
+        <button onclick="getProducts()">List Products</button>
+        <pre id="products-result"></pre>
+    </div>
+    <div class="section">
+        <h2>Order</h2>
+        <label>Product ID: <input id="order-product-id" type="number"></label>
+        <label>Quantity: <input id="order-quantity" type="number" value="1"></label>
+        <button onclick="order()">Place Order</button>
+        <pre id="order-result"></pre>
+    </div>
+    <script>
+        // Store cookies for session
+        function setCookie(name, value) {
+            document.cookie = name + '=' + value + ';path=/';
+        }
+        function getCookie(name) {
+            let match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            if (match) return match[2];
+        }
+        function showResult(id, data) {
+            document.getElementById(id).textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+        }
+        async function register() {
+            const username = document.getElementById('reg-username').value;
+            const password = document.getElementById('reg-password').value;
+            const res = await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            showResult('reg-result', await res.json());
+        }
+        async function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            showResult('login-result', await res.json());
+        }
+        async function logout() {
+            const res = await fetch('/logout', { method: 'POST' });
+            showResult('logout-result', await res.json());
+        }
+        async function me() {
+            const res = await fetch('/me');
+            showResult('me-result', await res.json());
+        }
+        async function getProducts() {
+            const res = await fetch('/products');
+            showResult('products-result', await res.json());
+        }
+        async function order() {
+            const product_id = parseInt(document.getElementById('order-product-id').value);
+            const quantity = parseInt(document.getElementById('order-quantity').value);
+            const res = await fetch('/order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ product_id, quantity })
+            });
+            showResult('order-result', await res.json());
+        }
+    </script>
+</body>
+</html>

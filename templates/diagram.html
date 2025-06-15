@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Architecture Diagram Editor (draw.io)</title>
+    <style>
+        body { font-family: sans-serif; padding: 0; margin: 0; }
+        #drawioFrame { width: 100vw; height: 80vh; border: none; }
+        #controls { margin: 10px; }
+        #diagramList { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <label for="filename">Filename:</label>
+        <input type="text" id="filename" value="diagram.xml" />
+        <button onclick="saveDiagram()">Save as XML</button>
+        <button onclick="saveDiagramAsPDF()">Save as PDF</button>
+        <button onclick="listDiagrams()">List Diagrams</button>
+        <select id="diagramList" onchange="loadDiagramFromList(this.value)">
+            <option value="">Select diagram to load</option>
+        </select>
+        <button onclick="loadDiagram()">Load Diagram</button>
+        <button onclick="downloadSelectedDiagram()">Download Selected</button>
+        <button onclick="testDrawioMessaging()">Test draw.io Messaging</button>
+    </div>
+    <div id="email-section">
+  <input type="email" id="diagram-email" placeholder="Enter your email..." />
+  <button onclick="sendDiagramToEmail()">Send to Email</button>
+</div>
+    <div id="share-section">
+  <h4>Share your diagram:</h4>
+  <a id="twitter-share" target="_blank">Share on Twitter</a> |
+  <a id="linkedin-share" target="_blank">Share on LinkedIn</a> |
+  <a id="whatsapp-share" target="_blank">Share on WhatsApp</a>
+</div>
+<script>
+function updateShareLinks(filename) {
+    const diagramUrl = window.location.origin + '/diagrams/' + encodeURIComponent(filename);
+
+    document.getElementById('twitter-share').href =
+      `https://twitter.com/intent/tweet?url=${encodeURIComponent(diagramUrl)}&text=Check%20out%20my%20architecture%20diagram!`;
+
+    document.getElementById('linkedin-share').href =
+      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(diagramUrl)}`;
+
+    document.getElementById('whatsapp-share').href =
+      `https://wa.me/?text=Check%20out%20this%20architecture%20diagram:%20${encodeURIComponent(diagramUrl)}`;
+}
+
+function onDiagramSelected() {
+    const filename = document.getElementById('filename').value;
+    if (filename) updateShareLinks(filename);
+}
+
+document.getElementById('filename').addEventListener('input', onDiagramSelected);
+document.getElementById('diagramList').addEventListener('change', function() {
+    if (this.value) updateShareLinks(this.value);
+});
+
+// Ensure diagram list is always visible and up to date
+window.addEventListener('DOMContentLoaded', function() {
+    listDiagrams();
+});
+    </script>
+    <iframe
+        id="drawioFrame"
+        src="https://embed.diagrams.net/?embed=1&ui=atlas&proto=json&origin=http://127.0.0.1:5000"
+        title="draw.io Diagram Editor"
+        allowfullscreen
+    ></iframe>
+    <script>
+        const frame = document.getElementById('drawioFrame');
+        let currentXml = {{ template_xml|tojson }};
+        let drawioReady = false;
+
+        window.addEventListener('message', function(evt) {
+            if (!evt.data) return;
+            let msg = evt.data;
+            if (typeof msg === "string") msg = JSON.parse(msg);
+            console.log('draw.io event:', msg); // DEBUG: log all events
+            // Draw.io ready
+            if (msg.event === 'init') {
+                drawioReady = true;
+                frame.contentWindow.postMessage(JSON.stringify({action: 'load', autosave: 1, xml: currentXml}), 'https://embed.diagrams.net');
+            }
+            // Export request (when user clicks save as XML)
+            if (msg.event === 'export' && (!msg.format || msg.format === 'xmlsvg')) {
+                currentXml = msg.data;
+                saveXmlToBackend(currentXml);
+            }
+            // Export request for PDF
+            if (msg.event === 'export' && msg.format === 'pdf') {
+                const pdfBase64 = msg.data;
+                const filename = document.getElementById('filename').value.replace(/\.xml$/i, '.pdf') || 'diagram.pdf';
+                if (!pdfBase64 || typeof pdfBase64 !== 'string' || pdfBase64.length < 50) {
+                    alert('PDF export failed or is empty. Try a simpler diagram or a different browser.');
+                    console.error('draw.io PDF export data:', pdfBase64);
+                    return;
+                }
+                console.log('draw.io PDF export data (truncated):', pdfBase64.substring(0, 100));
+                savePDFToBackend(pdfBase64, filename);
+            }
+        });
+
+        function saveDiagram() {
+            if (!drawioReady) {
+                alert("Diagram editor not ready yet!");
+                return;
+            }
+            frame.contentWindow.postMessage(JSON.stringify({action: 'export', format: 'xmlsvg', xml: 1}), 'https://embed.diagrams.net');
+        }
+
+        function saveXmlToBackend(xml) {
+            const filename = document.getElementById('filename').value || 'diagram.xml';
+            fetch('/save_diagram', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ xml: xml, filename: filename })
+            })
+            .then(res => res.json())
+            .then(data => alert(data.message || data.error));
+        }
+
+        function saveDiagramAsPDF() {
+            if (!drawioReady) {
+                alert("Diagram editor not ready yet!");
+                return;
+            }
+            frame.contentWindow.postMessage(JSON.stringify({action: 'export', format: 'pdf'}), 'https://embed.diagrams.net');
+        }
+
+        function savePDFToBackend(base64pdf, filename) {
+            if (!base64pdf || typeof base64pdf !== 'string' || base64pdf.length < 50) {
+                alert('PDF export failed or is empty. Try a simpler diagram or a different browser.');
+                console.error('draw.io PDF export data:', base64pdf);
+                return;
+            }
+            fetch('/save_pdf_diagram', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pdf: base64pdf, filename: filename })
+            })
+            .then(async res => {
+                let data;
+                try { data = await res.json(); } catch (e) { data = { error: 'Invalid server response' }; }
+                if (!res.ok) {
+                    alert(data.error || 'Failed to save PDF.');
+                } else {
+                    alert(data.message || 'PDF saved!');
+                }
+            })
+            .catch(err => {
+                alert('Network or server error: ' + err);
+            });
+        }
+
+        function loadDiagram() {
+            const filename = document.getElementById('filename').value;
+            fetch(`/load_diagram?filename=${encodeURIComponent(filename)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.xml) {
+                        currentXml = data.xml;
+                        frame.contentWindow.postMessage(JSON.stringify({action: 'load', xml: currentXml}), '*');
+                    } else {
+                        alert(data.error || "Error loading diagram.");
+                    }
+                });
+        }
+
+        function listDiagrams() {
+            fetch('/list_diagrams')
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('diagramList');
+                    select.innerHTML = '<option value="">Select diagram to load</option>';
+                    data.files.forEach(f => {
+                        const option = document.createElement('option');
+                        option.value = f;
+                        option.text = f;
+                        select.appendChild(option);
+                    });
+                });
+        }
+
+        function loadDiagramFromList(filename) {
+            if (filename) {
+                document.getElementById('filename').value = filename;
+                if(filename.endsWith('.xml')) {
+                    loadDiagram();
+                } else {
+                    // For PDF, do nothing on select (download button will handle)
+                }
+            }
+        }
+
+        function downloadSelectedDiagram() {
+            const filename = document.getElementById('diagramList').value;
+            if (!filename) {
+                alert('Please select a diagram to download.');
+                return;
+            }
+            window.open(`/diagrams/${encodeURIComponent(filename)}`, '_blank');
+        }
+
+        function testDrawioMessaging() {
+            console.log('Sending test message to draw.io iframe...');
+            frame.contentWindow.postMessage(JSON.stringify({action: 'export', format: 'xmlsvg', xml: 1}), 'https://embed.diagrams.net');
+        }
+        
+function sendDiagramToEmail() {
+    const email = document.getElementById('diagram-email').value;
+    const filename = document.getElementById('filename').value;
+    // Choose format based on what's saved/needed
+    const format = filename.endsWith('.pdf') ? 'pdf' : 'xml';
+
+    fetch('/send_diagram_email', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email: email, filename: filename, format: format })
+    })
+    .then(res => res.json())
+    .then(data => alert(data.message || data.error));
+}
+        // List diagrams on page load
+        listDiagrams();
+
+        window.addEventListener('beforeunload', function (e) {
+            if (currentXml && currentXml.length > 0) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                return 'You have unsaved changes. Are you sure you want to leave?';
+            }
+        });
+    </script>
+</body>
+</html>

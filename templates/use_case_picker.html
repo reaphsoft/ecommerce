@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Select a Use Case Template</title>
+</head>
+<body>
+  <h2>Select a Use Case Template</h2>
+  <form method="post">
+    <select name="template">
+      {% for name in templates %}
+      <option value="{{ name }}">{{ name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Start Designing</button>
+  </form>
+</body>
+</html>
