@@ -49,6 +49,4 @@ resource "aws_instance" "flask" {
   }
 }
 
-output "instance_public_ip" {
-  value = aws_instance.flask.public_ip
-}
+
